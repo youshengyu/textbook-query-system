@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+
+<html>
+
+  <head>
+
+    <base target="_top">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>
+
+      :root { --primary-color: #2c3e50; --bg-color: #f8f9fa; --accent-color: #3498db; }
+
+      body { font-family: "Microsoft JhengHei", sans-serif; background-color: var(--bg-color); padding: 20px; display: flex; justify-content: center; }
+
+      .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 1000px; }
+
+      h2 { color: var(--primary-color); text-align: center; margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+
+      .update-banner { text-align: center; font-size: 13px; color: #666; background: #f1f8ff; padding: 8px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #c8e1ff; }
+
+      .selection-container { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+
+      .form-group { flex: 1; min-width: 180px; }
+
+      label { display: block; margin-bottom: 8px; font-weight: bold; font-size: 14px; color: #555; }
+
+      select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; background: white; }
+
+      button { width: 100%; padding: 12px; background-color: var(--accent-color); color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; transition: 0.3s; }
+
+      button:hover { background-color: #2980b9; }
+
+      .table-wrapper { width: 100%; overflow-x: auto; margin-top: 20px; }
+
+      table { width: 100%; border-collapse: collapse; min-width: 700px; font-size: 14px; }
+
+      th, td { border: 1px solid #eee; padding: 10px; text-align: center; }
+
+      th { background-color: #f8f9fa; color: #555; position: sticky; top: 0; }
+
+      .grade-cell { font-weight: bold; color: #2c3e50; background-color: #f0f4f8; }
+
+      .info-box { background: #e8f4fd; padding: 15px; border-radius: 6px; border-left: 5px solid var(--accent-color); margin-bottom: 15px; }
+
+      .loading-text { color: #888; font-style: italic; font-size: 12px; }
+
+    </style>
+
+  </head>
+
+  <body>
+
+    <div class="card">
+
+      <h2>115學年度第一學期教科書版本查詢</h2>
+
+      <div id="updateBanner" class="update-banner">資料載入中...</div>
+
+      
+
+      <div class="selection-container">
+
+        <div class="form-group">
+
+          <label>1. 學制</label>
+
+          <select id="levelSelect" onchange="onLevelChange()">
+
+            <option value="">-- 載入中 --</option>
+
+          </select>
+
+        </div>
+
+
+
+        <div class="form-group">
+
+          <label>2. 學校</label>
+
+          <select id="schoolSelect" onchange="onSchoolChange()">
+
+            <option value="">請先選學制</option>
+
+          </select>
+
+        </div>
+
+
+
+        <div class="form-group">
+
+          <label>3. 年級 (選填)</label>
+
+          <select id="gradeSelect" onchange="onGradeChange()">
+
+            <option value="">-- 查全年級 --</option>
+
+          </select>
+
+        </div>
+
+
+
+        <div class="form-group">
+
+          <label>4. 學生姓名 (選填)</label>
+
+          <select id="studentSelect">
+
+            <option value="">-- 查全校版本 --</option>
+
+          </select>
+
+        </div>
+
+      </div>
+
+      
+
+      <button id="searchBtn" onclick="search()">立即查詢版本</button>
+
+      <div id="result"></div>
+
+    </div>
+
+
+
+    <script>
+
+      let cachedData = { options: {}, schools: {}, updateInfo: {} };
+
+
+
+      // 初始化：一次抓完所有選項與學校名單
+
+      window.onload = function() {
+
+        google.script.run.withSuccessHandler(res => {
+
+          cachedData = res;
+
+          initLevelSelect();
+
+          displayUpdateInfo(res.updateInfo);
+
+        }).getInitialData();
+
+      };
+
+
+
+      function displayUpdateInfo(info) {
+
+        const banner = document.getElementById('updateBanner');
+
+        if (info && info.time) {
+
+          banner.innerHTML = `🕒 最後更新時間：<strong>${info.time}</strong> ｜ 📝 更新內容：${info.content}`;
+
+        } else {
+
+          banner.innerHTML = `🕒 資料已同步完成`;
+
+        }
+
+      }
+
+
+
+      function initLevelSelect() {
+
+        const lSelect = document.getElementById('levelSelect');
+
+        lSelect.innerHTML = '<option value="">-- 請選擇 --</option>';
+
+        
+
+        const sortedLevels = ["國小", "國中", "高中"];
+
+        
+
+        sortedLevels.forEach(lvl => {
+
+          if (cachedData.options[lvl]) {
+
+            let opt = document.createElement('option');
+
+            opt.value = opt.textContent = lvl;
+
+            lSelect.appendChild(opt);
+
+          }
+
+        });
+
+      }
+
+
+
+      function onLevelChange() {
+
+        const level = document.getElementById('levelSelect').value;
+
+        const sSelect = document.getElementById('schoolSelect');
+
+        const gSelect = document.getElementById('gradeSelect');
+
+        const stSelect = document.getElementById('studentSelect');
+
+
+
+        sSelect.innerHTML = '<option value="">-- 選擇學校 --</option>';
+
+        gSelect.innerHTML = '<option value="">-- 查全年級 --</option>';
+
+        stSelect.innerHTML = '<option value="">-- 查全校版本 --</option>';
+
+
+
+        if (!level) return;
+
+
+
+        const schools = cachedData.schools[level] || [];
+
+        schools.forEach(sch => {
+
+          let opt = document.createElement('option');
+
+          opt.value = opt.textContent = sch;
+
+          sSelect.appendChild(opt);
+
+        });
+
+
+
+        if (cachedData.options[level]) {
+
+          cachedData.options[level].forEach(g => {
+
+            let opt = document.createElement('option');
+
+            opt.value = opt.textContent = g;
+
+            gSelect.appendChild(opt);
+
+          });
+
+        }
+
+      }
+
+
+
+      function onSchoolChange() { onGradeChange(); }
+
+
+
+      function onGradeChange() {
+
+        const level = document.getElementById('levelSelect').value;
+
+        const school = document.getElementById('schoolSelect').value;
+
+        const grade = document.getElementById('gradeSelect').value;
+
+        const stSelect = document.getElementById('studentSelect');
+
+        
+
+        if (school) {
+
+          stSelect.innerHTML = '<option>載入中...</option>';
+
+          google.script.run.withSuccessHandler(list => {
+
+            stSelect.innerHTML = '<option value="">-- 查全校版本 --</option>';
+
+            list.forEach(n => {
+
+              let opt = document.createElement('option');
+
+              opt.value = opt.textContent = n;
+
+              stSelect.appendChild(opt);
+
+            });
+
+          }).getFilteredStudents(level, school, grade);
+
+        }
+
+      }
+
+
+
+      function search() {
+
+        const level = document.getElementById('levelSelect').value;
+
+        const school = document.getElementById('schoolSelect').value;
+
+        const grade = document.getElementById('gradeSelect').value;
+
+        const name = document.getElementById('studentSelect').value;
+
+        const resultDiv = document.getElementById('result');
+
+        const btn = document.getElementById('searchBtn');
+
+
+
+        if (!level || !school) return alert("請至少選擇學制與學校");
+
+        
+
+        btn.disabled = true;
+
+        btn.innerText = "查詢中...";
+
+        resultDiv.innerHTML = '<p style="text-align:center;">正在抓取最新版本資料，請稍候...</p>';
+
+        
+
+        google.script.run.withSuccessHandler(res => {
+
+          btn.disabled = false;
+
+          btn.innerText = "立即查詢版本";
+
+          
+
+          if (typeof res === 'string') {
+
+            resultDiv.innerHTML = `<p style="color:red; text-align:center;">${res}</p>`;
+
+            return;
+
+          }
+
+          
+
+          let html = `
+
+            <div class="info-box">
+
+              <strong>${res.school}</strong><br>
+
+              <small>查詢對象：${res.student}${res.isMulti ? ' (全校清單)' : ''}</small>
+
+            </div>
+
+            <div class="table-wrapper">
+
+              <table>
+
+                <thead>
+
+                  <tr>
+
+                    <th>年級</th>
+
+                    ${res.data[0].group ? '<th>班群</th>' : ''}
+
+                    ${res.subjects.map(s => `<th>${s}</th>`).join('')}
+
+                  </tr>
+
+                </thead>
+
+                <tbody>
+
+                  ${res.data.map(row => `
+
+                    <tr>
+
+                      <td class="grade-cell">${row.grade}</td>
+
+                      ${row.group ? `<td>${row.group}</td>` : ''}
+
+                      ${row.books.map(b => `<td>${b.version}</td>`).join('')}
+
+                    </tr>
+
+                  `).join('')}
+
+                </tbody>
+
+              </table>
+
+            </div>`;
+
+          resultDiv.innerHTML = html;
+
+        }).queryTextbooks(name, school, grade, level);
+
+      }
+
+    </script>
+
+  </body>
+
+</html>
